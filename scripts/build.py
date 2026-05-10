@@ -339,30 +339,11 @@ def build_web_devices():
     return devices
 
 
-def load_button_types():
-    if not TYPES_DIR.is_dir():
-        return ""
-    files = sorted(TYPES_DIR.glob("*.js"))
-    if not files:
-        return ""
-    chunks = []
-    for f in files:
-        chunks.append(f"  // --- type: {f.stem} ---")
-        for line in f.read_text().rstrip().splitlines():
-            chunks.append(f"  {line}" if line.strip() else "")
-    return "\n".join(chunks) + "\n"
-
-
-def load_web_modules():
-    chunks = []
-    for name in WEB_MODULE_ORDER:
-        path = MODULES_DIR / f"{name}.js"
-        if not path.exists():
-            raise BuildError(f"Missing web module: {path.relative_to(ROOT)}")
-        chunks.append(f"  // --- module: {name} ---")
-        for line in path.read_text().rstrip().splitlines():
-            chunks.append(f"  {line}" if line.strip() else "")
-    return "\n".join(chunks) + "\n"
+def load_vue_app():
+    path = ROOT / "web" / "dist" / "everything.js"
+    if not path.exists():
+        raise BuildError(f"Missing Vue app: {path.relative_to(ROOT)}. Run 'pnpm run build:web' first.")
+    return path.read_text()
 
 
 def replace_marked_block(source_text, start_tag, end_tag, new_content):
@@ -378,15 +359,8 @@ def replace_marked_block(source_text, start_tag, end_tag, new_content):
     return source_text[: m.start(2)] + new_content + source_text[m.start(3) :]
 
 
-def replace_types(source_text):
-    replaced = replace_marked_block(source_text, TYPES_START, TYPES_END, load_button_types())
-    if replaced is None:
-        return source_text
-    return replaced
-
-
-def replace_modules(source_text):
-    replaced = replace_marked_block(source_text, MODULES_START, MODULES_END, load_web_modules())
+def replace_vue_app(source_text):
+    replaced = replace_marked_block(source_text, MODULES_START, MODULES_END, load_vue_app())
     if replaced is None:
         raise ValueError(f"Module markers not found: {MODULES_START} / {MODULES_END}")
     return replaced
@@ -413,7 +387,7 @@ def esbuild_cmd():
     found = shutil.which("esbuild")
     if found:
         return found
-    raise RuntimeError("esbuild not found. Run 'npm ci' before building www.js outputs.")
+    raise RuntimeError("esbuild not found. Run 'pnpm install' before building www.js outputs.")
 
 
 def minify_js(source_text):
@@ -434,8 +408,7 @@ def build_www(check_only=False):
     """Build per-device www.js from the single source template."""
     devices = build_web_devices()
     source_text = WWW_SOURCE.read_text()
-    source_text = replace_types(source_text)
-    source_text = replace_modules(source_text)
+    source_text = replace_vue_app(source_text)
     dirty = []
 
     for slug, cfg in devices.items():
